@@ -4,8 +4,14 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include<string>
+#include <regex>
+#include <pthread.h>
+
+#define NO_OF_THREADS 50
 
 using namespace std;
+
+int thread_counter = 0;
 
 // process attributes
 struct process{
@@ -50,7 +56,19 @@ void socket_Reset(int sockfd){
     close(sockfd);
 }
 
-void createProcessList(string);
+void createProcessList(string processString){
+    std::regex process_structure("(.[0-9]*)");
+    std::smatch match;
+    std::regex_search(processString, match, process_structure);
+    cout<<"p"<< match.str(1)<<endl;
+}
+
+void* time_demon(void* args){
+    int newsockfd = *((int *)args);
+    cout << newsockfd << endl;
+    close(newsockfd);
+    pthread_exit(NULL);
+}
 
 int main(int argc, char *argv[]){
     /*
@@ -62,7 +80,9 @@ int main(int argc, char *argv[]){
     int processID;
     int port;
     float localClock;
-    int sockfd;
+    int sockfd,clientfd,addrlen,rc;
+    struct sockaddr_in cliaddr;
+    pthread_t threads[NO_OF_THREADS];
 
     //represents the process Id and the port no
     struct process processesList;
@@ -77,16 +97,26 @@ int main(int argc, char *argv[]){
     cout << localClock << endl;
     string procList = argv[3];
     cout << procList << endl;
+    // createProcessList(procList);
 
-
-    /* ProcessId 1 is a time demon i.e. the master process*/
-    if (processID == 1){
-        sockfd = SocketInit(port);
-        
+    //Initialize socket
+    sockfd = SocketInit(8080);
+    addrlen = sizeof(cliaddr);
+    
+    while (1){
+        clientfd = accept(sockfd,(struct sockaddr * )&cliaddr,(socklen_t *)&addrlen);
+    	if(clientfd < 0 ){
+        	std::cout<< "Error creating connetion"<< std::endl;
+        	continue;
+    	}
+    	else{
+        	rc = pthread_create(&threads[thread_counter],NULL,time_demon,(void *)&clientfd);
+        	thread_counter++;
+        	while (thread_counter > NO_OF_THREADS){
+        		/* While thread limit had reached wait till the current clients close the connection*/
+        	}
+        }
     }
-    // Remaining Process
-    else{
 
-    }
     return 0;
 }
