@@ -85,6 +85,22 @@ int main(int argc, char *argv[]){
     clientlen = sizeof(servaddr);
     connect(clientfd,(struct sockaddr *)&servaddr,clientlen);
     
+    char signal[1];
+    int valread;
+    char clock[10];
+    while (strcmp(signal,"e")){
+        valread = read(clientfd, signal, 1);
+        if(!strcmp(signal,"p")){
+            //Send own logical clock value to the server
+            strcpy(clock, (char*)localClock);
+            send(clientfd, clock, strlen(clock), 0);
+
+            // wait for logical value from the clock
+            valread = read(clientfd, clock, 10);
+            localClock = (int)clock;
+            std::cout << "Local Clock updated to:"<< localClock << std::endl;
+        }
+    }
     close(clientfd);
     return 0;
 }
