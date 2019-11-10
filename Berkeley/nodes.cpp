@@ -58,20 +58,9 @@ int main(int argc, char *argv[]){
     int localClock;
     int sockfd,addrlen,rc;
     struct sockaddr_in cliaddr;
-
-    localClock = (processID*7)%13; // Add randomness to the value of clock
-
-    // if (argc < 2){ // Update
-    //     cout<<"Process ID missing. Please specify process ID" << endl;
-    //     return -1;
-    // }
-    // processID = stoi(argv[1]);
-    // port = stoi(argv[2]);
-    // localClock = (processID*7)%13; // Add randomness to the value of clock
-    // cout << localClock << endl;
-    // string procList = argv[3];
-    // cout << procList << endl;
-    // createProcessList(procList);
+    time_t t;
+    srand((unsigned) time(&t));
+    localClock = rand()%25; // Add randomness to the value of clock
 
     int clientfd,clientlen;
     struct sockaddr_in servaddr;
@@ -80,27 +69,30 @@ int main(int argc, char *argv[]){
     bzero(&servaddr, sizeof(servaddr));
     servaddr.sin_family = AF_INET;
     servaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
-    servaddr.sin_port = htons(8080);
+    servaddr.sin_port = htons(8447);
 
     clientlen = sizeof(servaddr);
     connect(clientfd,(struct sockaddr *)&servaddr,clientlen);
     
     char signal[1];
     int valread;
-    char clock[10];
-    while (strcmp(signal,"e")){
-        valread = read(clientfd, signal, 1);
-        if(!strcmp(signal,"p")){
-            //Send own logical clock value to the server
-            strcpy(clock, (char*)localClock);
-            send(clientfd, clock, strlen(clock), 0);
+    char clock[10]={'0'};
+    char newClock[10]={'0'};
+    valread = read(clientfd, signal, 1024);
+    string lc = std::to_string(localClock);
+    // std::cout << "Converted to string is: " << lc << std::endl;
+    strcpy(clock, lc.c_str());
+    std::cout << "Local Clock: "<< localClock<<std::endl;
 
-            // wait for logical value from the clock
-            valread = read(clientfd, clock, 10);
-            localClock = (int)clock;
-            std::cout << "Local Clock updated to:"<< localClock << std::endl;
-        }
-    }
+    send(clientfd, clock, strlen(clock), 0);
+    memset(&clock, '0', 10);
+    // wait for logical value from the clock
+    valread = read(clientfd, newClock, 1024);
+    int temp = stoi(newClock);
+    std::cout << "Average time: " << temp << std::endl;
+    std::cout << "Time adjustment: " << (temp - localClock) << std::endl;
+    localClock += (temp - localClock);
+    std::cout << "Local clock value is now: " << localClock << std::endl;
     close(clientfd);
     return 0;
 }
