@@ -115,6 +115,7 @@ void* time_demon(void* args){
     localClock += (time_demon_time - localClock);
     std::cout << "Local clock value is now: " << localClock << std::endl;
     send_time();
+    time_demon_is_running = false;
 }
 
 void* worker(void* args){
@@ -161,7 +162,7 @@ int main(int argc, char *argv[]){
     sockfd = SocketInit(8447);
     addrlen = sizeof(cliaddr);
     
-    while (1){
+    while (time_demon_is_running){
         clientfd = accept(sockfd,(struct sockaddr * )&cliaddr,(socklen_t *)&addrlen);
     	if(clientfd < 0 ){
         	std::cout<< "Error creating connetion"<< std::endl;
