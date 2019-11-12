@@ -3,7 +3,8 @@
 #include <sys/socket.h> 
 #include <arpa/inet.h> 
 #include <netinet/in.h>
-#include <unistd.h> 
+#include <unistd.h>
+#include <string.h>
 #include <fstream>
 #include <algorithm>
 
@@ -72,8 +73,8 @@ int SocketInit(int port){
     int option = 1;
     // Create a socket
     sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-    setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, &option, sizeof(option));
-    setsockopt(sockfd, SOL_SOCKET, SO_REUSESHAREUID, &option, sizeof(option));
+    setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
+    // setsockopt(sockfd, SOL_SOCKET, SO_REUSESHAREUID, &option, sizeof(option));
 
 
     if (sockfd < 0){
@@ -101,7 +102,7 @@ void* send_thread(void * args){
         while (std::getline(readfile, output)){
             // std::cout << output << std::endl;
             sendto(sockfd, (const char *)output.c_str(), strlen(output.c_str()), 
-            MSG_SEND, (const struct sockaddr *) &servaddr,  
+            MSG_CONFIRM, (const struct sockaddr *) &servaddr,  
             sizeof(servaddr));
             sleep(1);
             
