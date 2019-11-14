@@ -77,7 +77,9 @@ int time_calculator(){
 void poll_time(){
     std::cout << "Polling" << std::endl;
     int tempsockfd = 0;
-    char signal[1] = {'p'}; // Poll signal for nodes
+    char signal[10] = {'p'}; // Poll signal for nodes
+    std::string currentClock = std::to_string(localClock);
+    strcpy(signal, currentClock.c_str());
     char clock_buffer[10]={'0'};
     int valread;
     for(int i=0; i < NO_OF_THREADS ;i++){

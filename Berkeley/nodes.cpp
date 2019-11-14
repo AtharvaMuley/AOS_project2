@@ -74,11 +74,13 @@ int main(int argc, char *argv[]){
     clientlen = sizeof(servaddr);
     connect(clientfd,(struct sockaddr *)&servaddr,clientlen);
     
-    char signal[1];
+    char sclock[10];
     int valread;
     char clock[10]={'0'};
     char newClock[10]={'0'};
     valread = read(clientfd, signal, 1024);
+    int servertime = std::stoi(signal);
+    
     string lc = std::to_string(localClock);
     // std::cout << "Converted to string is: " << lc << std::endl;
     strcpy(clock, lc.c_str());
