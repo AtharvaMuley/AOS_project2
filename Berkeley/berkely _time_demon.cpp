@@ -159,7 +159,7 @@ int main(int argc, char *argv[]){
     std::cout<< "Local Clock: " << localClock << std::endl;
 
     //Initialize socket
-    sockfd = SocketInit(8447);
+    sockfd = SocketInit(8449);
     addrlen = sizeof(cliaddr);
     
     while (time_demon_is_running){
