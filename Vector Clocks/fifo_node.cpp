@@ -73,7 +73,7 @@ void init_all_sockets(){
         }
         sockets[i].sockfd = sockfd;
         sockets[i].servaddr = servaddr;
-        std::cout << "Building sockets of port: " << port+i << "with sockfd" << sockets[i].sockfd << std::endl;
+        // std::cout << "Building sockets of port: " << port+i << "with sockfd" << sockets[i].sockfd << std::endl;
 
     }
 }
@@ -105,7 +105,7 @@ void* send_thread(void * args){
     std::ifstream readfile;
     std::string filename = std::to_string(processid) + ".txt";
     readfile.open(filename);
-    std::cout << "Filename: " << filename << std::endl;
+    // std::cout << "Filename: " << filename << std::endl;
     std::string output;
     int destsockfd;
     if (readfile.is_open()){
@@ -125,7 +125,7 @@ void* send_thread(void * args){
 
 void* recv_thread(void * args){
     struct thread_data data = *((struct thread_data*)args);
-    std::cout << "self port is: " << port+processid-1<< std::endl;
+    std::cout << "Self port is: " << port+processid-1<< std::endl;
     int sockfd;
 
     int option = 1;
@@ -154,7 +154,7 @@ void* recv_thread(void * args){
     while(1){
         n = recvfrom(sockfd,(char *)buffer, BUFFER_LEN, MSG_WAITALL,(struct sockaddr *) &cliaddr,(socklen_t*)&len);
         buffer[n] = '\0';
-        std::cout << "message received " << buffer << std::endl;
+        std::cout << "message received =>" << buffer << std::endl;
     }
 }
 
