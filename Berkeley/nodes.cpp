@@ -78,10 +78,10 @@ int main(int argc, char *argv[]){
     int valread;
     char clock[10]={'0'};
     char newClock[10]={'0'};
-    valread = read(clientfd, signal, 1024);
-    int servertime = std::stoi(signal);
-    
-    string lc = std::to_string(localClock);
+    valread = read(clientfd, sclock, 1024);
+    int servertime = std::stoi(sclock);
+    int new_time = localClock - servertime;
+    string lc = std::to_string(new_time);
     // std::cout << "Converted to string is: " << lc << std::endl;
     strcpy(clock, lc.c_str());
     std::cout << "Local Clock: "<< localClock<<std::endl;
@@ -91,9 +91,9 @@ int main(int argc, char *argv[]){
     // wait for logical value from the clock
     valread = read(clientfd, newClock, 1024);
     int temp = stoi(newClock);
-    std::cout << "Average time: " << temp << std::endl;
-    std::cout << "Time adjustment: " << (temp - localClock) << std::endl;
-    localClock += (temp - localClock);
+    std::cout << "Offset time: " << temp << std::endl;
+    // std::cout << "Time adjustment: " << (temp - localClock) << std::endl;
+    localClock += temp ;
     std::cout << "Local clock value is now: " << localClock << std::endl;
     close(clientfd);
     return 0;

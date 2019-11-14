@@ -13,7 +13,7 @@
 int thread_counter = 0,acounter = 0;
 int all_clocks[NO_OF_THREADS]; // Holds value of logical clocks of all the nodes
 int all_sockdfd[NO_OF_THREADS];
-int time_demon_time = 0;
+int average = 0;
 int localClock = 0;
 
 bool time_demon_is_running = true;
@@ -71,7 +71,7 @@ int time_calculator(){
         // std::cout << all_clocks[i] << std::endl;
         new_clock += all_clocks[i];
     }
-    return floor((new_clock + localClock)/(NO_OF_THREADS+1));
+    return floor((new_clock)/(NO_OF_THREADS+1));
 }
 
 void poll_time(){
@@ -94,13 +94,15 @@ void poll_time(){
 void send_time(){
     int tempsockfd = -1;
     char clock_buffer[10] = {'0'};
-    std::string time = std::to_string(time_demon_time);
+    
     // std::cout << "Converted to string is: " << time << std::endl;
-    strcpy(clock_buffer, time.c_str());
     // std::cout << sizeof(clock_buffer) << std::endl;
     // std::cout << "TTT " << clock_buffer <<std::endl;
     for(int i=0; i < NO_OF_THREADS ;i++){
         tempsockfd = all_sockdfd[i];
+        int offset = average - all_clocks[i];
+        std::string time = std::to_string(offset);
+        strcpy(clock_buffer, time.c_str());
         // std::cout << "sending time to: " << tempsockfd << std::endl;
         send(tempsockfd, clock_buffer, sizeof(clock_buffer),0);
     }
@@ -111,10 +113,10 @@ void* time_demon(void* args){
     time_demon_is_running = true;
     std::cout << "Time demon started" << std::endl;
     poll_time();
-    time_demon_time = time_calculator();
-    std::cout << "Average time: " << time_demon_time << std::endl;
-    std::cout << "Time adjustment: " << (time_demon_time - localClock) << std::endl;
-    localClock += (time_demon_time - localClock);
+    average = time_calculator();
+    std::cout << "Offset time: " << average << std::endl;
+    // std::cout << "Time adjustment: " << (average - localClock) << std::endl;
+    localClock += average;
     std::cout << "Local clock value is now: " << localClock << std::endl;
     send_time();
     time_demon_is_running = false;
