@@ -38,12 +38,12 @@ std::string access_clock(){
 int* convert_to_vector(std::string msg){
     int vector[NO_OF_CLIENTS];
     std::smatch match;
-    std::regex cv("(.[0-9]*),");
+    std::regex cv("\\[(.[0-9]*),(.[0-9]*),(.[0-9]*)");
     std::regex_search(msg, match,cv);
-
+    std::cout << msg << std::endl;
     for(int i=0; i <  NO_OF_CLIENTS;i++){
         vector[i] = std::stoi(match.str(i+1));
-        std::cout << "v: " << vector[i] <<std::endl;
+        // std::cout << "v: " << match.str(i+1) <<std::endl;
     }
     return vector;
 }
@@ -62,7 +62,15 @@ void update_vector_clock(std::string msg){
     while(!&lock){
         pthread_cond_wait(&lock,&mutex);
     }
-    int *va = convert_to_vector(msg);
+    int va[NO_OF_CLIENTS];
+    std::smatch match;
+    std::regex cv("\\[(.[0-9]*),(.[0-9]*),(.[0-9]*)");
+    std::regex_search(msg, match,cv);
+    // std::cout << msg << std::endl;
+    for(int i=0; i <  NO_OF_CLIENTS;i++){
+        va[i] = std::stoi(match.str(i+1));
+        // std::cout << "v: " << match.str(i+1) <<std::endl;
+    }
     for(int i=0; i< NO_OF_CLIENTS;i++){
         if (processid == i){
             vector_clock[i] = std::max(vector_clock[i], va[i]) + 1;
@@ -71,6 +79,7 @@ void update_vector_clock(std::string msg){
             vector_clock[i] = std::max(vector_clock[i], va[i]);
         }
     }
+    std::cout <<"Updated vector: " << access_clock() << std::endl;
     pthread_cond_signal(&lock);
     pthread_mutex_unlock(&mutex);
 }
@@ -104,7 +113,7 @@ void init_all_sockets(){
         }
         sockets[i].sockfd = sockfd;
         sockets[i].servaddr = servaddr;
-        std::cout << "Building sockets of port: " << port+i << "with sockfd" << sockets[i].sockfd << std::endl;
+        std::cout << "Building sockets of port: " << port+i << " with sockfd " << sockets[i].sockfd << std::endl;
 
     }
 }
@@ -143,6 +152,7 @@ void* send_thread(void * args){
         while (std::getline(readfile, output)){
             // std::cout << output << std::endl;
             strcpy(buffer, output.c_str());
+            strcat(buffer," ");
             strcat(buffer, update_self().c_str());
 
             for(int i=0; i < NO_OF_CLIENTS; i++){
