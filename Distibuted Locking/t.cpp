@@ -5,18 +5,23 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <fstream>
+#include <string.h>
 
 #define NO_OF_CLIENTS 4
 #define REQ_MSG "REQUEST"
-#define OK_MSG "REQUEST"
-#define REL_MSG "REQUEST"
+#define OK_MSG "OK"
+#define REL_MSG "RELEASE"
 #define no_of_clients 3
 
 int processid = -1;
 int port = 0000;
 int thread_counter;
 
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t lock = PTHREAD_COND_INITIALIZER;
+
 void resource_handler(){
+    sleep(4);
     std::fstream readfile;
     readfile.open("shared_file.txt");
     if(readfile.is_open()){
@@ -34,14 +39,25 @@ void resource_handler(){
 void* worker(void *args){
     int newsockfd = *((int*)args);
     char signal[] = OK_MSG;
-    std::cout << "Fd: " << newsockfd << std::endl;
+    std::cout << "Request from:" << newsockfd << std::endl;
     char buffer[1024];
     int valread;
+    
+    pthread_mutex_lock(&mutex);
+    while(!&lock){
+            	 pthread_cond_wait(&lock,&mutex);
+    }
     valread = read(newsockfd,buffer,10);
-    std::cout << buffer << std::endl;
+    // std::cout << buffer << std::endl;
+    std::cout << "Message from " << newsockfd << " socket: " << buffer << std::endl;
 
     send(newsockfd, signal, sizeof(signal), 0);
     valread = read(newsockfd,buffer,10);
+    std::cout << "Message from " << newsockfd << " socket: " << buffer << std::endl;
+
+    pthread_cond_signal(&lock);
+    pthread_mutex_unlock(&mutex);
+    
 
     //Release signal from the client
 
@@ -117,7 +133,7 @@ int main(int argc, char *argv[]){
             }
             addrlen = sizeof(cliaddr);
             thread_counter = 0;
-            std::cout << "THis works too" << std::endl;
+            std::cout << "Shared File is now ready to be accessed." << std::endl;
             while(1){
                 clientfd = accept(sockfd,(struct sockaddr * )&cliaddr,(socklen_t *)&addrlen);
                 pthread_create(&t[thread_counter],NULL, worker, (void*)&clientfd);
@@ -128,13 +144,12 @@ int main(int argc, char *argv[]){
         }
         else{
             //Parent
-            std::cout << "This works " << std::endl;
+            // std::cout << "This works " << std::endl;
         
             while (1){}   
         }
     }
     else{
-            std::cout << "executing else" << std::endl;
             int clientfd,clientlen;
             struct sockaddr_in servaddr;
 
@@ -151,10 +166,11 @@ int main(int argc, char *argv[]){
             }
             char signal[] = REQ_MSG;
             char buffer[1024];
-    
+
+            std::cout << "Requesting access to the Shared File" << std::endl;
             send(clientfd, signal, sizeof(signal), 0);
             read(clientfd, buffer, 1024);
-
+            std::cout << "Message from server: "<< buffer << std::endl; 
             resource_handler();
             strcpy(signal,REL_MSG);
             send(clientfd, signal, sizeof(signal), 0);

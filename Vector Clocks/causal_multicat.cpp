@@ -7,6 +7,7 @@
 #include <string.h>
 #include <fstream>
 #include <algorithm>
+#include <regex>
 
 #define BUFFER_LEN 1024
 #define NO_OF_CLIENTS 3
@@ -16,6 +17,7 @@ int vector_clock[3] = {0,0,0};
 int processid = -1;
 int port = 0;
 int total_no_processes = 0;
+
 int all_sockets[NO_OF_CLIENTS-1];
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t lock = PTHREAD_COND_INITIALIZER;
@@ -26,25 +28,41 @@ struct socket_ds{
 }sockets[NO_OF_CLIENTS];
 
 std::string access_clock(){
-    pthread_mutex_lock(&mutex);
-    while(!&lock){
-        pthread_cond_wait(&lock,&mutex);
-    }
     std::string clock = "[";
     for(int i=0; i < NO_OF_CLIENTS;i++){
         clock += std::to_string(vector_clock[i]) + ",";
     }
     clock += "]";
-    pthread_cond_signal(&lock);
-    pthread_mutex_unlock(&mutex);
+    return clock;
 }
+int* convert_to_vector(std::string msg){
+    int vector[NO_OF_CLIENTS];
+    std::smatch match;
+    std::regex cv("(.[0-9]*),");
+    std::regex_search(msg, match,cv);
 
-void update_vector_clock(int va[NO_OF_CLIENTS]){
+    for(int i=0; i <  NO_OF_CLIENTS;i++){
+        vector[i] = std::stoi(match.str(i+1));
+        std::cout << "v: " << vector[i] <<std::endl;
+    }
+    return vector;
+}
+std::string update_self(){
     pthread_mutex_lock(&mutex);
     while(!&lock){
         pthread_cond_wait(&lock,&mutex);
     }
-
+    vector_clock[processid-1] += 1;
+    return access_clock();
+    pthread_cond_signal(&lock);
+    pthread_mutex_unlock(&mutex);
+}
+void update_vector_clock(std::string msg){
+    pthread_mutex_lock(&mutex);
+    while(!&lock){
+        pthread_cond_wait(&lock,&mutex);
+    }
+    int *va = convert_to_vector(msg);
     for(int i=0; i< NO_OF_CLIENTS;i++){
         if (processid == i){
             vector_clock[i] = std::max(vector_clock[i], va[i]) + 1;
@@ -67,14 +85,14 @@ void init_all_sockets(){
     for(int i=0; i < NO_OF_CLIENTS; i++){
         // all_sockets[i] = SocketInit(port+i-1);
         int sockfd;
-        int option = 1;
+        // int option = 1;
         // Create a socket
         sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-        setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, &option, sizeof(option));
+        // setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, &option, sizeof(option));
 
         struct sockaddr_in servaddr;
 
-        servaddr.sin_addr.s_addr = inet_addr("127.0.01");
+        servaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
 
         servaddr.sin_port = htons(port+i);
         servaddr.sin_family = AF_INET;
@@ -86,7 +104,7 @@ void init_all_sockets(){
         }
         sockets[i].sockfd = sockfd;
         sockets[i].servaddr = servaddr;
-        // std::cout << "Building sockets of port: " << port+i << "with sockfd" << sockets[i].sockfd << std::endl;
+        std::cout << "Building sockets of port: " << port+i << "with sockfd" << sockets[i].sockfd << std::endl;
 
     }
 }
@@ -124,9 +142,12 @@ void* send_thread(void * args){
     if (readfile.is_open()){
         while (std::getline(readfile, output)){
             // std::cout << output << std::endl;
+            strcpy(buffer, output.c_str());
+            strcat(buffer, update_self().c_str());
+
             for(int i=0; i < NO_OF_CLIENTS; i++){
                 // std::cout<< "sending to sockfd: " << sockets[i].sockfd << std::endl;
-                sendto(sockets[i].sockfd, (const char *)output.c_str(), strlen(output.c_str()), 0, (const struct sockaddr *) &sockets[i].servaddr, sizeof(sockets[i].servaddr));
+                sendto(sockets[i].sockfd, buffer, strlen(buffer), 0, (const struct sockaddr *) &sockets[i].servaddr, sizeof(sockets[i].servaddr));
             }
             
             sleep(3);
@@ -141,10 +162,10 @@ void* recv_thread(void * args){
     std::cout << "Self port is: " << port+processid-1<< std::endl;
     int sockfd;
 
-    int option = 1;
+    // int option = 1;
     // Create a socket
     sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-    setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, &option, sizeof(option));
+    // setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, &option, sizeof(option));
 
     std::cout << "Sockfd from recv is: " << sockfd << std::endl; 
     
@@ -165,9 +186,10 @@ void* recv_thread(void * args){
     char buffer[BUFFER_LEN];
     int n, len;
     while(1){
-        n = recvfrom(sockfd,(char *)buffer, BUFFER_LEN, MSG_WAITALL,(struct sockaddr *) &cliaddr,(socklen_t*)&len);
+        n = recvfrom(sockfd,(char *)buffer, BUFFER_LEN, 0,(struct sockaddr *) &cliaddr,(socklen_t*)&len);
         buffer[n] = '\0';
-        std::cout << "message received =>" << buffer << std::endl;
+        update_vector_clock(buffer);
+        std::cout << "message received => " << buffer << std::endl;
     }
 }
 
@@ -187,10 +209,11 @@ int main(int argc, char *argv[]){
     init_all_sockets();
     td.filename = std::to_string(processid) + ".txt";
     pthread_t send_t, recv_t;
-    std::cout << "Sleeping for 2 seconds to let every process initialize"<<std::endl;
+    std::cout << "Sleeping for 4 seconds to let every process initialize"<<std::endl;
+    pthread_create(&recv_t,NULL, recv_thread, (void *)&td);
     sleep(4);
     pthread_create(&send_t,NULL, send_thread, (void *)&td);
-    pthread_create(&recv_t,NULL, recv_thread, (void *)&td);
+    
 
 
     pthread_join(send_t, NULL);

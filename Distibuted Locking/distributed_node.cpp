@@ -5,6 +5,7 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <fstream>
+#include <string.h>
 
 #define NO_OF_CLIENTS 4
 #define REQ_MSG "REQUEST"
