@@ -171,6 +171,7 @@ int main(int argc, char *argv[]){
     port = std::stoi(argv[3]);
 
     // td.sockfd = SocketInit(8824);
+    
     init_all_sockets();
     td.filename = std::to_string(processid) + ".txt";
     pthread_t send_t, recv_t;
