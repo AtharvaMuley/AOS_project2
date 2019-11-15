@@ -9,46 +9,19 @@
 
 #define NO_OF_CLIENTS 4
 #define REQ_MSG "REQUEST"
-#define OK_MSG "REQUEST"
-#define REL_MSG "REQUEST"
-
+#define OK_MSG "OK"
+#define REL_MSG "RELEASE"
+#define no_of_clients 3
 
 int processid = -1;
 int port = 0000;
+int thread_counter;
 
-int SocketInit(int port){
-    int sockfd;
-    struct sockaddr_in servaddr;
-
-    // Create a socket
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0){
-        std::cout << "Error creating a socket" << std::endl;
-        return -1;
-    }
-    //fill servaddr with zeros 
-    memset(&servaddr,0, sizeof(struct sockaddr_in));
-
-    //Assign IP with port 
-    servaddr.sin_family = AF_INET;
-    servaddr.sin_addr.s_addr = INADDR_ANY;
-    servaddr.sin_port = htons(port);
-
-    //bind ip with port 
-    if(bind(sockfd,(struct sockaddr *) &servaddr, sizeof(servaddr)) < 0 ){
-        std::cerr << "Binding Error: " << std::endl;
-	exit(0);
-    }
-
-    if(listen(sockfd,5) < 0){
-        std::cerr << "Listening Error: " << std::endl;
-	exit(0);
-    }
-
-    return sockfd;
-}
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t lock = PTHREAD_COND_INITIALIZER;
 
 void resource_handler(){
+    sleep(4);
     std::fstream readfile;
     readfile.open("shared_file.txt");
     if(readfile.is_open()){
@@ -65,15 +38,39 @@ void resource_handler(){
 // This serves the request
 void* worker(void *args){
     int newsockfd = *((int*)args);
+    char signal[] = OK_MSG;
+    std::cout << "Request from:" << newsockfd << std::endl;
+    char buffer[1024];
+    int valread;
+    
+    pthread_mutex_lock(&mutex);
+    while(!&lock){
+            	 pthread_cond_wait(&lock,&mutex);
+    }
+    valread = read(newsockfd,buffer,10);
+    // std::cout << buffer << std::endl;
+    std::cout << "Message from " << newsockfd << " socket: " << buffer << std::endl;
+
+    send(newsockfd, signal, sizeof(signal), 0);
+    valread = read(newsockfd,buffer,10);
+    std::cout << "Message from " << newsockfd << " socket: " << buffer << std::endl;
+
+    pthread_cond_signal(&lock);
+    pthread_mutex_unlock(&mutex);
     
 
+    //Release signal from the client
+
+    thread_counter--;
     pthread_exit(NULL);
 }
 
 bool fileInit(){
-    std::ifstream readfile;
-    readfile.open("shared_file.txt");
+    std::fstream readfile;
+    readfile.open("./shared_file.txt", std::ios::out|std::ios::in);
     if(readfile.is_open()){
+        int counter = 0;
+        readfile << counter;
         readfile.close();
         return true;
     }
@@ -82,7 +79,6 @@ bool fileInit(){
 }
 
 int main(int argc, char *argv[]){
-
     /*
         First argument is the file name
         Second argument is the process id
@@ -93,8 +89,8 @@ int main(int argc, char *argv[]){
        return -1;
    }
     processid = std::stoi(argv[1]);
-    std::cout << "Process ID: " << processid << std::endl;
     port = std::stoi(argv[2]);
+    std::cout << "Process ID: " << processid << " Port: "<< port << std::endl;
 
     
     // Master process server
@@ -102,66 +98,85 @@ int main(int argc, char *argv[]){
 
         if(fork() == 0){
             // Child process
-            int clientfd, addrlen, thread_counter = 0;
-            pthread_t threads[NO_OF_CLIENTS];
-            struct sockaddr_in cliaddr;
-            //Create a server for requesting nodes
-            int sockfd = SocketInit(port);
-
             if(!fileInit()){
+                std::cout << "Error creating the shared file" << std::endl;
                 return -1;
             }
 
+            int sockfd, clientfd, addrlen;
+            struct sockaddr_in servaddr,cliaddr;
+            pthread_t t[no_of_clients];
+
+            // Create a socket
+            sockfd = socket(AF_INET, SOCK_STREAM, 0);
+            if (sockfd < 0){
+                std::cout << "Error creating a socket" << std::endl;
+                return -1;
+            }
+            //fill servaddr with zeros 
+            memset(&servaddr,0, sizeof(struct sockaddr_in));
+
+            //Assign IP with port 
+            servaddr.sin_family = AF_INET;
+            servaddr.sin_addr.s_addr = INADDR_ANY;
+            servaddr.sin_port = htons(port);
+
+            //bind ip with port 
+            if(bind(sockfd,(struct sockaddr *) &servaddr, sizeof(servaddr)) < 0 ){
+                std::cerr << "Binding Error: " << std::endl;
+            exit(0);
+            }
+
+            if(listen(sockfd,5) < 0){
+                std::cerr << "Listening Error: " << std::endl;
+            exit(0);
+            }
             addrlen = sizeof(cliaddr);
+            thread_counter = 0;
+            std::cout << "Shared File is now ready to be accessed." << std::endl;
             while(1){
                 clientfd = accept(sockfd,(struct sockaddr * )&cliaddr,(socklen_t *)&addrlen);
-                pthread_create(&threads[thread_counter], NULL, worker, (void*)&clientfd);
+                pthread_create(&t[thread_counter],NULL, worker, (void*)&clientfd);
+                pthread_join(t[thread_counter],NULL);
                 thread_counter++;
-                while (thread_counter>NO_OF_CLIENTS){}
+                while(thread_counter > no_of_clients){}
             }
         }
         else{
             //Parent
-            while (1)
-            {
-                
-            }
-            
+            // std::cout << "This works " << std::endl;
+        
+            while (1){}   
         }
     }
-    int serverlen,csockfd;
-    struct sockaddr_in servaddr;
-    //Other process
-    serverlen = sizeof(servaddr);
-    // Create a socket
-    csockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (csockfd < 0){
-        std::cout << "Error creating a socket" << std::endl;
-        return -1;
-    }
-    //fill servaddr with zeros 
-    memset(&servaddr,0, sizeof(struct sockaddr_in));
+    else{
+            int clientfd,clientlen;
+            struct sockaddr_in servaddr;
 
-    //Assign IP with port 
-    servaddr.sin_family = AF_INET;
-    servaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
-    servaddr.sin_port = htons(port);
-    if (connect(csockfd,(struct sockaddr *)&servaddr,serverlen) == -1){
-        std::cout << "Error connecting, Exiting" << std::endl;
-        return -1;
-    }
+            clientfd = socket(AF_INET,SOCK_STREAM,0);
+            bzero(&servaddr, sizeof(servaddr));
+            servaddr.sin_family = AF_INET;
+            servaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+            servaddr.sin_port = htons(port);
+
+            clientlen = sizeof(servaddr);
+            if(connect(clientfd,(struct sockaddr *)&servaddr,clientlen) == -1){
+                std::cout << "Error connecting to server" << std::endl;
+                return -1;
+            }
+            char signal[] = REQ_MSG;
+            char buffer[1024];
+
+            std::cout << "Requesting access to the Shared File" << std::endl;
+            send(clientfd, signal, sizeof(signal), 0);
+            read(clientfd, buffer, 1024);
+            std::cout << "Message from server: "<< buffer << std::endl; 
+            resource_handler();
+            strcpy(signal,REL_MSG);
+            send(clientfd, signal, sizeof(signal), 0);
+            sleep(2);
+            close(clientfd);
+        }
     
-    char signal[] = REQ_MSG;
-    char buffer[1024];
-    std::cout << "Trying to create a socket" << std::endl;
-    while(1){
-        send(csockfd, signal, sizeof(signal), 0);
-        read(csockfd, buffer, 1024);
-
-        resource_handler();
-        strcpy(signal,REL_MSG);
-        send(csockfd, signal, sizeof(signal), 0);
-        sleep(2);
-    }
     return 0;
 }
