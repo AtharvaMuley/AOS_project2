@@ -1,7 +1,10 @@
 CC=g++
 
-compile: berkeley_time_demon
-berkeley_time_demon: berkeley_time_demon.o
-	$(CC) -o berkeley_time_demon berkeley_time_demon.o -lpthread
-berkeley_time_demon.o: berkeley_time_demon.cpp
-	$(CC) -c berkeley_time_demon.cpp -lpthread
+compile: all
+
+all:
+	g++ -o berkeley_time_demon berkeley_time_demon.cpp -lpthread
+	g++ -o node nodes.cpp
+
+clean:
+	rm berkeley_time_demon node
