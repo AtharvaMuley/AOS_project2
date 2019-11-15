@@ -75,19 +75,17 @@ int time_calculator(){
 }
 
 void poll_time(){
-    std::cout << "Polling" << std::endl;
+    std::cout << "Polling clients for time difference" << std::endl;
     int tempsockfd = 0;
-    char signal[10] = {'p'}; // Poll signal for nodes
+    char signal[10] = {'0'}; // Poll signal for nodes
     std::string currentClock = std::to_string(localClock);
     strcpy(signal, currentClock.c_str());
     char clock_buffer[10]={'0'};
     int valread;
     for(int i=0; i < NO_OF_THREADS ;i++){
         tempsockfd = all_sockdfd[i];
-        // std::cout << "tempsock " << tempsockfd << std::endl;
         send(tempsockfd, signal, strlen(signal), 0);
         int valread = read(tempsockfd,clock_buffer,10);
-        // std::cout << "clock b: " << clock_buffer << std::endl;
         all_clocks[i] = std::stoi(clock_buffer);
     }
 }
@@ -95,46 +93,38 @@ void send_time(){
     int tempsockfd = -1;
     char clock_buffer[10] = {'0'};
     
-    // std::cout << "Converted to string is: " << time << std::endl;
-    // std::cout << sizeof(clock_buffer) << std::endl;
-    // std::cout << "TTT " << clock_buffer <<std::endl;
     for(int i=0; i < NO_OF_THREADS ;i++){
         tempsockfd = all_sockdfd[i];
         int offset = average - all_clocks[i];
         std::string time = std::to_string(offset);
         strcpy(clock_buffer, time.c_str());
-        // std::cout << "sending time to: " << tempsockfd << std::endl;
         send(tempsockfd, clock_buffer, sizeof(clock_buffer),0);
     }
 }
 
 void* time_demon(void* args){
-    // Run time demon after every 10 seconds
     time_demon_is_running = true;
     std::cout << "Time demon started" << std::endl;
     poll_time();
     average = time_calculator();
     std::cout << "Offset time: " << average << std::endl;
-    // std::cout << "Time adjustment: " << (average - localClock) << std::endl;
     localClock += average;
-    std::cout << "Local clock value is now: " << localClock << std::endl;
+    std::cout << "Local clock value after sync is: " << localClock << std::endl;
     send_time();
     time_demon_is_running = false;
 }
 
 void* worker(void* args){
     int newsockfd = *((int *)args);
-    // std::cout << newsockfd << std::endl;
-    // Update sockfd on conncection
     pthread_mutex_lock(&mutex);
     while(!&lock){
             	 pthread_cond_wait(&lock,&mutex);
-            }
+    }
     all_sockdfd[acounter] = newsockfd;
     acounter++;
     pthread_cond_signal(&lock);
     pthread_mutex_unlock(&mutex);
-    if (thread_counter == NO_OF_THREADS){
+    if (acounter == NO_OF_THREADS){
         //Starting time demon
         pthread_t timed;
         pthread_create(&timed, NULL, time_demon,NULL);
@@ -154,19 +144,18 @@ int main(int argc, char *argv[]){
     struct sockaddr_in cliaddr;
     pthread_t threads[NO_OF_THREADS];
 
-    //represents the process Id and the port no
     struct process processesList;
 
     time_t t;
     srand((unsigned) time(&t));
-    localClock = rand()%25; // Add randomness to the value of clock
+    localClock = rand()%25 + 1; // Add randomness to the value of clock
     std::cout<< "Local Clock: " << localClock << std::endl;
 
     //Initialize socket
-    sockfd = SocketInit(8449);
+    sockfd = SocketInit(8441);
     addrlen = sizeof(cliaddr);
     
-    while (time_demon_is_running){
+    while(time_demon_is_running){
         clientfd = accept(sockfd,(struct sockaddr * )&cliaddr,(socklen_t *)&addrlen);
     	if(clientfd < 0 ){
         	std::cout<< "Error creating connetion"<< std::endl;
@@ -174,7 +163,8 @@ int main(int argc, char *argv[]){
     	}
     	else{
         	rc = pthread_create(&threads[thread_counter],NULL,worker,(void *)&clientfd);
-        	thread_counter++;
+        	//pthread_join(threads[thread_counter],NULL);
+            thread_counter++;
         	while (thread_counter > NO_OF_THREADS){
         		/* While thread limit had reached wait till the current clients close the connection*/
         	}

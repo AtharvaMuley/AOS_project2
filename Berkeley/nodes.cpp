@@ -47,20 +47,13 @@ void socket_Reset(int sockfd){
 }
 
 int main(int argc, char *argv[]){
-    /*
-    1: file name
-    2: process ID
-    3: port
-    4: list of process 
-    */
-    int processID;
-    int port;
     int localClock;
     int sockfd,addrlen,rc;
     struct sockaddr_in cliaddr;
+
     time_t t;
     srand((unsigned) time(&t));
-    localClock = rand()%25; // Add randomness to the value of clock
+    localClock = rand()%25 +1; // Add randomness to the value of clock
 
     int clientfd,clientlen;
     struct sockaddr_in servaddr;
@@ -69,7 +62,7 @@ int main(int argc, char *argv[]){
     bzero(&servaddr, sizeof(servaddr));
     servaddr.sin_family = AF_INET;
     servaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
-    servaddr.sin_port = htons(8449);
+    servaddr.sin_port = htons(8441);
 
     clientlen = sizeof(servaddr);
     connect(clientfd,(struct sockaddr *)&servaddr,clientlen);
@@ -78,23 +71,25 @@ int main(int argc, char *argv[]){
     int valread;
     char clock[10]={'0'};
     char newClock[10]={'0'};
+
+    //Receiver server time
     valread = read(clientfd, sclock, 1024);
     int servertime = std::stoi(sclock);
     int new_time = localClock - servertime;
     string lc = std::to_string(new_time);
-    // std::cout << "Converted to string is: " << lc << std::endl;
     strcpy(clock, lc.c_str());
     std::cout << "Local Clock: "<< localClock<<std::endl;
 
+    //(localtime - servertime) send to server
     send(clientfd, clock, strlen(clock), 0);
     memset(&clock, '0', 10);
-    // wait for logical value from the clock
+
+    // wait for offset value from the clock
     valread = read(clientfd, newClock, 1024);
     int temp = stoi(newClock);
     std::cout << "Offset time: " << temp << std::endl;
-    // std::cout << "Time adjustment: " << (temp - localClock) << std::endl;
     localClock += temp ;
-    std::cout << "Local clock value is now: " << localClock << std::endl;
+    std::cout << "Local clock value after sync is: " << localClock << std::endl;
     close(clientfd);
     return 0;
 }
