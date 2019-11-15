@@ -42,7 +42,6 @@ void resource_handler(){
 void* worker(void *args){
     int newsockfd = *((int*)args);
     char signal[] = OK_MSG;
-    std::cout << "Request from:" << newsockfd << std::endl;
     char buffer[1024];
     int valread;
     
@@ -50,7 +49,7 @@ void* worker(void *args){
     // std::cout << buffer << std::endl;
     std::cout << "Message from " << newsockfd << " socket: " << buffer << std::endl;
     if(strcmp(buffer, REQ_MSG) == 0){
-        std::cout << "Requested" << std::endl;
+        std::cout << "Requested Resource" << std::endl;
         if (top == -1){
         top = newsockfd;
         }
@@ -65,7 +64,6 @@ void* worker(void *args){
         }
     }
     
-    std::cout << "CT " << top <<std::endl;
     //Wait till turn doesnt comes up
     while(top != newsockfd){}
     //Send ok message
@@ -81,17 +79,14 @@ void* worker(void *args){
         }
         if(resource_queue.empty()){
             top = -1;
-            std::cout << "CT2 " << top <<std::endl;
-
         }
         else{
             top = resource_queue.front();
             resource_queue.pop_front();
-            std::cout << "CT3 " << top <<std::endl;
-
         }
         pthread_cond_signal(&lock);
         pthread_mutex_unlock(&mutex);
+        std::cout << "Resource released by sockfd: "<<newsockfd<<std::endl;
     }
 
     
