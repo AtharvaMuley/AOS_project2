@@ -170,7 +170,6 @@ int main(int argc, char *argv[]){
     processid = std::stoi(argv[2]);
     port = std::stoi(argv[3]);
 
-    // td.sockfd = SocketInit(8824);
     
     init_all_sockets();
     td.filename = std::to_string(processid) + ".txt";
