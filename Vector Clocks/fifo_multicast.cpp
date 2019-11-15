@@ -175,9 +175,9 @@ int main(int argc, char *argv[]){
     td.filename = std::to_string(processid) + ".txt";
     pthread_t send_t, recv_t;
     std::cout << "Sleeping for 2 seconds to let every process initialize"<<std::endl;
+    pthread_create(&recv_t,NULL, recv_thread, (void *)&td);
     sleep(4);
     pthread_create(&send_t,NULL, send_thread, (void *)&td);
-    pthread_create(&recv_t,NULL, recv_thread, (void *)&td);
 
 
     pthread_join(send_t, NULL);

@@ -8,8 +8,11 @@
 #include <fstream>
 #include <algorithm>
 #include <regex>
+#include <list>
+
 
 #define BUFFER_LEN 1024
+#define MSG_QUEUE_LEN 100
 #define NO_OF_CLIENTS 3
 
 // Vector clock for all process. Limited to three process
@@ -19,9 +22,13 @@ int port = 0;
 int total_no_processes = 0;
 
 int all_sockets[NO_OF_CLIENTS-1];
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t lock = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t mutex_vlock = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t vlock = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t mutex_mlock = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t mlock = PTHREAD_COND_INITIALIZER;
 
+std::list <std::string> message_queue;
+bool update_vector_clock(std::string);
 struct socket_ds{
     int sockfd;
     struct sockaddr_in servaddr;
@@ -35,6 +42,20 @@ std::string access_clock(){
     clock += "]";
     return clock;
 }
+
+void* message_ordering(void *args){   
+    while(1){
+        if(!message_queue.empty()){
+            for(auto itr = message_queue.begin();itr != message_queue.end(); itr++){
+                std::string s = *itr;
+                if(update_vector_clock(s)){
+                    message_queue.remove(s);
+                }
+            }
+        }
+    }
+}
+
 int* convert_to_vector(std::string msg){
     int vector[NO_OF_CLIENTS];
     std::smatch match;
@@ -48,40 +69,54 @@ int* convert_to_vector(std::string msg){
     return vector;
 }
 std::string update_self(){
-    pthread_mutex_lock(&mutex);
-    while(!&lock){
-        pthread_cond_wait(&lock,&mutex);
+    pthread_mutex_lock(&mutex_vlock);
+    while(!&vlock){
+        pthread_cond_wait(&vlock,&mutex_vlock);
     }
     vector_clock[processid-1] += 1;
     return access_clock();
-    pthread_cond_signal(&lock);
-    pthread_mutex_unlock(&mutex);
+    pthread_cond_signal(&vlock);
+    pthread_mutex_unlock(&mutex_vlock);
 }
-void update_vector_clock(std::string msg){
-    pthread_mutex_lock(&mutex);
-    while(!&lock){
-        pthread_cond_wait(&lock,&mutex);
+bool update_vector_clock(std::string msg){
+    pthread_mutex_lock(&mutex_vlock);
+    while(!&vlock){
+        pthread_cond_wait(&vlock,&mutex_vlock);
     }
     int va[NO_OF_CLIENTS];
-    std::smatch match;
+    int spid;
+    std::smatch match,m2;
+    std::regex pm("(.[0-9]*)");
     std::regex cv("\\[(.[0-9]*),(.[0-9]*),(.[0-9]*)");
     std::regex_search(msg, match,cv);
     // std::cout << msg << std::endl;
+    bool flag = false;
+
+    std::regex_search(msg,m2,pm);
+    std::cout << m2.str(1) << std::endl;
+
     for(int i=0; i <  NO_OF_CLIENTS;i++){
         va[i] = std::stoi(match.str(i+1));
         // std::cout << "v: " << match.str(i+1) <<std::endl;
     }
+    if(vector_clock[spid-1] + 1 != va[spid-1]){
+        return false;
+    }
     for(int i=0; i< NO_OF_CLIENTS;i++){
-        if (processid == i){
-            vector_clock[i] = std::max(vector_clock[i], va[i]) + 1;
-        }
-        else{
-            vector_clock[i] = std::max(vector_clock[i], va[i]);
+        if (spid-1 != i){
+            if(vector_clock[i] > va[i]){
+                return false;
+            }
         }
     }
+    vector_clock[spid] += 1;
+    std::cout << "message received => " << msg << std::endl;
+    vector_clock[spid-1] += 1;
+    
     std::cout <<"Updated vector: " << access_clock() << std::endl;
-    pthread_cond_signal(&lock);
-    pthread_mutex_unlock(&mutex);
+    pthread_cond_signal(&vlock);
+    pthread_mutex_unlock(&mutex_vlock);
+    return true;
 }
 
 struct thread_data{
@@ -193,13 +228,24 @@ void* recv_thread(void * args){
 	    exit(0);
     }
 
-    char buffer[BUFFER_LEN];
+    //Start thread for maintianing causal ordering
+    pthread_t t;
+    pthread_create(&t, NULL, message_ordering, NULL);
+    char buffer[1024];
     int n, len;
     while(1){
         n = recvfrom(sockfd,(char *)buffer, BUFFER_LEN, 0,(struct sockaddr *) &cliaddr,(socklen_t*)&len);
-        buffer[n] = '\0';
-        update_vector_clock(buffer);
-        std::cout << "message received => " << buffer << std::endl;
+        // buffer[n] = '\0';
+        pthread_mutex_lock(&mutex_mlock);
+        while(!&mlock){
+            pthread_cond_wait(&mlock,&mutex_mlock);
+        }
+            std::string s (buffer, strlen(buffer));
+            message_queue.push_back(s);
+        pthread_cond_signal(&mlock);
+        pthread_mutex_unlock(&mutex_mlock);
+        // update_vector_clock(buffer);
+       std::cout << "message received => " << s << std::endl;
     }
 }
 
