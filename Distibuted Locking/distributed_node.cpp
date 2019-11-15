@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <fstream>
 #include <string.h>
+#include <list>
 
 #define NO_OF_CLIENTS 4
 #define REQ_MSG "REQUEST"
@@ -16,6 +17,8 @@
 int processid = -1;
 int port = 0000;
 int thread_counter;
+int top = -1;
+std::list <int> resource_queue;
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t lock = PTHREAD_COND_INITIALIZER;
@@ -43,23 +46,55 @@ void* worker(void *args){
     char buffer[1024];
     int valread;
     
-    pthread_mutex_lock(&mutex);
-    while(!&lock){
-            	 pthread_cond_wait(&lock,&mutex);
-    }
     valread = read(newsockfd,buffer,10);
     // std::cout << buffer << std::endl;
     std::cout << "Message from " << newsockfd << " socket: " << buffer << std::endl;
-
-    send(newsockfd, signal, sizeof(signal), 0);
-    valread = read(newsockfd,buffer,10);
-    std::cout << "Message from " << newsockfd << " socket: " << buffer << std::endl;
-
-    pthread_cond_signal(&lock);
-    pthread_mutex_unlock(&mutex);
+    if(strcmp(buffer, REQ_MSG) == 0){
+        std::cout << "Requested" << std::endl;
+        if (top == -1){
+        top = newsockfd;
+        }
+        else{
+            pthread_mutex_lock(&mutex);
+            while(!&lock){
+                pthread_cond_wait(&lock,&mutex);
+            }
+            resource_queue.push_back(newsockfd);
+            pthread_cond_signal(&lock);
+            pthread_mutex_unlock(&mutex);
+        }
+    }
     
+    std::cout << "CT " << top <<std::endl;
+    //Wait till turn doesnt comes up
+    while(top != newsockfd){}
+    //Send ok message
+    send(newsockfd, signal, sizeof(signal), 0);
 
-    //Release signal from the client
+    //wait for release msg
+    valread = read(newsockfd,buffer,10);
+    if(strcmp(buffer, REL_MSG) == 0){
+        std::cout << "Message from " << newsockfd << " socket: " << buffer << std::endl;
+        pthread_mutex_lock(&mutex);
+        while(!&lock){
+            pthread_cond_wait(&lock,&mutex);
+        }
+        if(resource_queue.empty()){
+            top = -1;
+            std::cout << "CT2 " << top <<std::endl;
+
+        }
+        else{
+            top = resource_queue.front();
+            resource_queue.pop_front();
+            std::cout << "CT3 " << top <<std::endl;
+
+        }
+        pthread_cond_signal(&lock);
+        pthread_mutex_unlock(&mutex);
+    }
+
+    
 
     thread_counter--;
     pthread_exit(NULL);
@@ -170,8 +205,14 @@ int main(int argc, char *argv[]){
             std::cout << "Requesting access to the Shared File" << std::endl;
             send(clientfd, signal, sizeof(signal), 0);
             read(clientfd, buffer, 1024);
-            std::cout << "Message from server: "<< buffer << std::endl; 
-            resource_handler();
+            std::cout << "Message from server: "<< buffer << std::endl;
+            
+            //Request resource only when ok msg is receved
+            if(strcmp(buffer, OK_MSG) == 0){
+                resource_handler();
+            }  
+
+            //Send release message to server
             strcpy(signal,REL_MSG);
             send(clientfd, signal, sizeof(signal), 0);
             sleep(2);
